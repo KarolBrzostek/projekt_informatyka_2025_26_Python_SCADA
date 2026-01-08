@@ -1,0 +1,1 @@
+# projekt_informatyka_2025_26_Python_SCADA
