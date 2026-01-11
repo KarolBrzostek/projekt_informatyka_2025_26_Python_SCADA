@@ -1,6 +1,4 @@
 import sys
-from tkinter import SE, SEL
-from turtle import width
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLineEdit, QLabel, QFrame
 from PyQt5.QtCore import QRectF, Qt, QTimer, QPointF
 from PyQt5.QtGui import QPainter, QColor, QPen, QPainterPath, QLinearGradient, QPolygonF
