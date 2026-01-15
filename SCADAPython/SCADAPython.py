@@ -55,8 +55,8 @@ class OknoUzupelniania(QDialog):
 
         dane_przyciskow = [
             ("CYAN", "#00FFFF", "black", 'C'),
-            ("MAGENTA", "#FFFF00", "black", 'M'),
-            ("YELLOW", "#FF00FF", "black", 'Y'),
+            ("MAGENTA", "#FF00FF", "black", 'M'),
+            ("YELLOW", "#FFFF00", "black", 'Y'),
             ("BLACK", "#000000", "white", 'K'),
             ("WHITE", "#FFFFFF", "black", 'W')
         ]
@@ -403,7 +403,7 @@ class AplikacjaSCADA(QWidget):
         self.przycisk_alarmy = QPushButton("DZIENNIK POWIADOMIEN", self.panel)
         self.przycisk_alarmy.setGeometry(20, 590 , 250, 50)
         self.przycisk_alarmy.setStyleSheet(" color: black; font-size: 15px; font-weight: bold;")
-        self.przycisk_alarmy.clicked.connect(self.okno_alarmowe.show)
+        self.przycisk_alarmy.clicked.connect(self.pokaz_okno_alarmowe)
 
         self.okno_uzupelnij = OknoUzupelniania(self)
 
@@ -472,6 +472,8 @@ class AplikacjaSCADA(QWidget):
             self.okno_alarmowe.dodaj_wpis(f"Wprowadzono niepoprawny kod HEX: {kod}", "ALARM")
             self.hex_wejsciowy.setText("#")
             return
+
+        self.okno_uzupelnij.close()
 
         c, m, y, k = wynik
         calkowita_objetosc = 200.0
@@ -612,6 +614,11 @@ class AplikacjaSCADA(QWidget):
     def otworz_okno_uzupelniania(self):
         if self.stan == "OCZEKIWANIE" or self.stan == "ZAKONCZONO":
             self.okno_uzupelnij.show()
+            self.okno_uzupelnij.raise_()
+
+    def pokaz_okno_alarmowe(self):
+        self.okno_alarmowe.show()
+        self.okno_alarmowe.raise_()
 
     def uzupelnij_farby(self):
         if self.stan == "OCZEKIWANIE" or self.stan == "ZAKONCZONO":
