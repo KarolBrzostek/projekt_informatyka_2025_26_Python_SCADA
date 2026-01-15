@@ -1,8 +1,43 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLineEdit, QLabel, QFrame
+import datetime
+from PyQt5.QtWidgets import QApplication, QDialog, QTextEdit, QVBoxLayout, QWidget, QPushButton, QLineEdit, QLabel, QFrame
 from PyQt5.QtCore import QRectF, Qt, QTimer, QPointF
 from PyQt5.QtGui import QPainter, QColor, QPen, QPainterPath, QLinearGradient, QPolygonF
 from pymodbus.client import ModbusTcpClient
+
+class OknoAlarmow(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Dziennik Zdarzen i Alarmow")
+        self.setFixedSize(450, 500)
+
+        layout = QVBoxLayout()
+        
+        self.etykieta = QLabel("Historia przebiegu procesu:")
+        self.etykieta.setStyleSheet("font-weight: bold; font-size: 12px;")
+        layout.addWidget(self.etykieta)
+
+        self.przestrzen_alarmow = QTextEdit()
+        self.przestrzen_alarmow.setReadOnly(True)
+        self.przestrzen_alarmow.setStyleSheet("font-family: Consolas; font-size: 10pt; background-color: #F0F0F0")
+        layout.addWidget(self.przestrzen_alarmow)
+
+        self.setLayout(layout)
+
+    def dodaj_wpis(self, tresc, typ = ""):
+        czas = datetime.datetime.now().strftime("%H:%M:%S")
+
+        kolor = "black"
+        if typ == "ALARM": kolor = "red"
+        elif typ == "SUKCES": kolor = "green"
+        elif typ == "INFO": kolor = "blue"
+
+        wpis = f'<span style = "color:gray;">[{czas}]</span> <span style = "color:{kolor}; font-weight: bold;"> {typ}:</span> {tresc}'
+        self.przestrzen_alarmow.append(wpis)
+
+        if typ == "ALARM":
+            self.show()
+            self.raise_()
 
 class Rura:
     def __init__ (self, punkty, kolor_farby, grubosc = 12, kolor_rury=Qt.gray):
@@ -306,6 +341,15 @@ class AplikacjaSCADA(QWidget):
         # self.proporcje_kolorow.setAlignment(Qt.AlignCenter)
         self.proporcje_kolorow.setStyleSheet("font-size: 10px;")
 
+        self.okno_alarmowe = OknoAlarmow()
+        self.okno_alarmowe.dodaj_wpis("Aplikacja SCADA uruchomiona.", "INFO")
+
+        self.przycisk_alarmy = QPushButton("DZIENNIK POWIADOMIEN", self.panel)
+        self.przycisk_alarmy.setGeometry(20, 590 , 250, 50)
+        self.przycisk_alarmy.setStyleSheet(" color: black; font-size: 15px; font-weight: bold;")
+        self.przycisk_alarmy.clicked.connect(self.okno_alarmowe.show)
+
+
         self.przycisk_uzupelnij = QPushButton("UZUPELNIJ", self.panel)
         self.przycisk_uzupelnij.setGeometry(20, 660 , 250, 50)
         self.przycisk_uzupelnij.setStyleSheet("background-color: green; color: white; font-size:15px; font-weight: bold;")
@@ -332,11 +376,6 @@ class AplikacjaSCADA(QWidget):
         if not self.modbus_polaczony or nazwa not in self.mapa_cewek: return
         adres = self.mapa_cewek[nazwa]
         try:
-
-        # if not self.modbus_polaczony or nazwa not in self.mapa_cewek: return
-        # adres = self.mapa_cewek[nazwa]
-        # print(f"[DEBUG SCADA] Wysylam: {nazwa} na adres {adres} -> {stan}")  # <--- DODAJ TO
-        # try:
             try: 
                 self.client.write_coil(adres, stan, slave = 1)
             except TypeError:
@@ -368,10 +407,13 @@ class AplikacjaSCADA(QWidget):
         if self.stan != "OCZEKIWANIE": return
 
         kod = self.hex_wejsciowy.text()
+        self.kod = kod
         wynik = self.hex_na_cmyk(kod)
 
         if wynik is None:
             self.status.setText("Blad! Zly kod HEX!")
+            self.okno_alarmowe.dodaj_wpis(f"Wprowadzono niepoprawny kod HEX: {kod}", "ALARM")
+            self.hex_wejsciowy.setText("#")
             return
 
         c, m, y, k = wynik
@@ -388,7 +430,18 @@ class AplikacjaSCADA(QWidget):
 
         if ilosc_w < 0: ilosc_w = 0
 
-        self.cel_skladniki = {'C': ilosc_c, 'M' : ilosc_m, 'Y': ilosc_y, 'K': ilosc_k, 'W': ilosc_w}
+        wymagane = {'C': ilosc_c, 'M' : ilosc_m, 'Y': ilosc_y, 'K': ilosc_k, 'W': ilosc_w}
+        brak_skladnikow = False
+
+        for klucz, ilosc in wymagane.items():
+            if self.zbiorniki[klucz].aktualna_ilosc < ilosc:
+                self.okno_alarmowe.dodaj_wpis(f"ALARM: Zbyt mala ilosc skladnika {self.zbiorniki[klucz].nazwa}. Wymagane: {ilosc:.1f}. Obecnie: {self.zbiorniki[klucz].aktualna_ilosc:.1f}", "ALARM")
+                brak_skladnikow = True
+        if brak_skladnikow:
+            self.status.setText("Blad: Za malo skladnikow!")
+            return
+
+        self.cel_skladniki = wymagane
         self.skladniki_dodane = {'C': 0, 'M': 0, 'Y': 0, 'K': 0, 'W': 0}
 
         self.mikser.aktualna_ilosc = 0
@@ -406,12 +459,14 @@ class AplikacjaSCADA(QWidget):
 
         self.stan = "DOZOWANIE"
         self.status.setText("Status: DOZOWANIE")
+        self.okno_alarmowe.dodaj_wpis(f"Rozpoczeto produkcje koloru {kod}.", "INFO")
         self.timer.start(50)
 
     def rozpocznij_wylewanie(self):
         if self.stan == "WYMIESZANO":
             self.stan = "ROZLEWANIE"
             self.status.setText("Status: ROZLEWANIE")
+            self.okno_alarmowe.dodaj_wpis(f"Rozpoczeto proces rozlewania farby.", "INFO")
 
     def logika_symulacji(self):
         if self.stan == "DOZOWANIE":
@@ -420,6 +475,7 @@ class AplikacjaSCADA(QWidget):
                 self.stan = "MIESZANIE"
                 self.licznik_czasu = 0
                 self.status.setText("MIESZANIE")
+                self.okno_alarmowe.dodaj_wpis(f"Zakonczono dozowanie farb. Start mieszania.", "INFO")
                 return
 
             klucz = self.kolejnosc[self.indeks_skladnika]
@@ -465,6 +521,7 @@ class AplikacjaSCADA(QWidget):
                 self.stan = "WYMIESZANO"
                 self.status.setText("Status: WYMIESZANO")
                 self.przycisk_rozlej.setStyleSheet("background-color: green; color: white; font-size: 15px; font-weight: bold;")
+                self.okno_alarmowe.dodaj_wpis(f"Mieszanie zakonczone. Farba gotowa.", "INFO")
                 self.mieszadlo.aktywne = False
                 self.steruj_plc('MIESZADLO', False)
 
@@ -485,6 +542,7 @@ class AplikacjaSCADA(QWidget):
                 self.przycisk_start.setStyleSheet("background-color: green; color: white; font-size: 15px; font-weight: bold;")
                 self.przycisk_rozlej.setStyleSheet("background-color: grey; color: black; font-size: 15px; font-weight: bold;")
                 self.hex_wejsciowy.setText("#")
+                self.okno_alarmowe.dodaj_wpis(f"Rozlewanie zakonczone. Proces produkcji farby {self.kod} zakonczony.", "SUKCES")
                 self.timer.stop()
 
                 self.indeks_skladnika = 0
@@ -495,6 +553,7 @@ class AplikacjaSCADA(QWidget):
     def uzupelnij_farby(self):
         if self.stan == "OCZEKIWANIE" or self.stan == "ZAKONCZONO":
             for zb in self.zbiorniki.values(): zb.uzupenlnij_zbiornik()
+            self.okno_alarmowe.dodaj_wpis(f"Uzupelniono zbiorniki zrodlowe.", "INFO")
             self.update()
 
     def paintEvent(self, event):
