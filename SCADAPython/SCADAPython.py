@@ -2,6 +2,7 @@ import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLineEdit, QLabel, QFrame
 from PyQt5.QtCore import QRectF, Qt, QTimer, QPointF
 from PyQt5.QtGui import QPainter, QColor, QPen, QPainterPath, QLinearGradient, QPolygonF
+from pymodbus.client import ModbusTcpClient
 
 class Rura:
     def __init__ (self, punkty, kolor_farby, grubosc = 12, kolor_rury=Qt.gray):
@@ -199,6 +200,17 @@ class AplikacjaSCADA(QWidget):
         self.setFixedSize(1400, 800)
         self.setStyleSheet("background-color: #F0F0F0")
 
+        self.client = ModbusTcpClient('localhost', port = 5020)
+        self.modbus_polaczony = False
+        try:
+            if self.client.connect():
+                self.modbus_polaczony = True
+                print("Polaczono z PLC")
+            else : print("Brak polaczenia z PLC. Wlaczanie demo graficznego.")
+        except: print("Blad polaczenia z PLC.")
+
+        self.mapa_cewek = {'C': 0, 'M': 1, 'Y' : 2, 'K': 3, 'W': 4, 'ROZLEW': 5, 'MIESZADLO': 6}
+
         #Definicja zbiornikow
         self.z_c = Zbiornik(50, 50, kolor_farby = "#00FFFF", nazwa="CYAN")
         self.z_c.aktualna_ilosc = 50.0
@@ -254,7 +266,7 @@ class AplikacjaSCADA(QWidget):
         p_sp_koniec = (p_sp_start[0], p_sp_start[1]+220)
         self.rura_spustowa = Rura([p_sp_start, p_sp_koniec], kolor_farby= "")
 
-        self.rury = {'C': self.rura_c, 'M' : self.rura_m, 'Y': self.rura_y, 'K': self.rura_k, "W": self.rura_w, "WYLEW": self.rura_spustowa}
+        self.rury = {'C': self.rura_c, 'M' : self.rura_m, 'Y': self.rura_y, 'K': self.rura_k, "W": self.rura_w, "ROZLEW": self.rura_spustowa}
 
         #Definicja zaworow
         self.zawor_c = Zawor(100, 250)
@@ -264,7 +276,7 @@ class AplikacjaSCADA(QWidget):
         self.zawor_w = Zawor(950, 250)
         self.zawor_spustowy = Zawor(500, 650)
 
-        self.zawory = {'C': self.zawor_c, 'M' : self.zawor_m, 'Y': self.zawor_y, 'K': self.zawor_k, 'W': self.zawor_w, "WYLEW": self.zawor_spustowy}
+        self.zawory = {'C': self.zawor_c, 'M' : self.zawor_m, 'Y': self.zawor_y, 'K': self.zawor_k, 'W': self.zawor_w, "ROZLEW": self.zawor_spustowy}
 
         self.mieszadlo = Mieszadlo(500, 520)
 
@@ -315,6 +327,25 @@ class AplikacjaSCADA(QWidget):
 
         self.indeks_skladnika = 0
         self.kolejnosc = ['C', 'M', 'Y', 'K', 'W']
+
+    def steruj_plc(self, nazwa, stan):
+        if not self.modbus_polaczony or nazwa not in self.mapa_cewek: return
+        adres = self.mapa_cewek[nazwa]
+        try:
+
+        # if not self.modbus_polaczony or nazwa not in self.mapa_cewek: return
+        # adres = self.mapa_cewek[nazwa]
+        # print(f"[DEBUG SCADA] Wysylam: {nazwa} na adres {adres} -> {stan}")  # <--- DODAJ TO
+        # try:
+            try: 
+                self.client.write_coil(adres, stan, slave = 1)
+            except TypeError:
+                try: 
+                    self.client.write_coil(adres, stan, unit = 1)
+                except TypeError:
+                    self.client.write_coil(adres, stan)
+        except Exception as e:
+            print(f"Blad Modbus ({nazwa}): {e}")
 
     def hex_na_cmyk(self, kod_hex):
         try:
@@ -406,21 +437,25 @@ class AplikacjaSCADA(QWidget):
 
                     self.zawory[klucz].ustaw_stan(True)
                     self.rury[klucz].ustaw_przeplyw(True, self.zbiorniki[klucz].kolor_farby)
+                    self.steruj_plc(klucz, True)
                     self.status.setText(f"Status: DOZOWANIE SKLADNIKA {klucz}")
                     self.update()
                 else:
                     self.zawory[klucz].ustaw_stan(False)
                     self.rury[klucz].ustaw_przeplyw(False)
+                    self.steruj_plc(klucz, False)
                     self.indeks_skladnika += 1
             else:
                 self.zawory[klucz].ustaw_stan(False)
                 self.rury[klucz].ustaw_przeplyw(False)
+                self.steruj_plc(klucz, False)
 
                 self.indeks_skladnika += 1
             
         elif self.stan == "MIESZANIE":
             self.licznik_czasu += 1
             self.mieszadlo.aktywne = True
+            self.steruj_plc('MIESZADLO', True)
             self.mieszadlo.aktualizuj()
 
             if self.licznik_czasu > 20:
@@ -431,6 +466,7 @@ class AplikacjaSCADA(QWidget):
                 self.status.setText("Status: WYMIESZANO")
                 self.przycisk_rozlej.setStyleSheet("background-color: green; color: white; font-size: 15px; font-weight: bold;")
                 self.mieszadlo.aktywne = False
+                self.steruj_plc('MIESZADLO', False)
 
         elif self.stan == "ROZLEWANIE":
             predkosc_wylewania = 2.0
@@ -439,11 +475,13 @@ class AplikacjaSCADA(QWidget):
             if usunieto > 0:
                 self.zawor_spustowy.ustaw_stan(True)
                 self.rura_spustowa.ustaw_przeplyw(True, self.mikser.kolor_farby)
+                self.steruj_plc('ROZLEW', True)
             else:
                 self.zawor_spustowy.ustaw_stan(False)
                 self.rura_spustowa.ustaw_przeplyw(False)
                 self.stan = "OCZEKIWANIE"
                 self.status.setText("Status: ZAKONCZONO")
+                self.steruj_plc('ROZLEW', False)
                 self.przycisk_start.setStyleSheet("background-color: green; color: white; font-size: 15px; font-weight: bold;")
                 self.przycisk_rozlej.setStyleSheet("background-color: grey; color: black; font-size: 15px; font-weight: bold;")
                 self.hex_wejsciowy.setText("#")
