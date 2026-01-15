@@ -5,7 +5,7 @@ from PyQt5.QtCore import QRectF, Qt, QTimer, QPointF
 from PyQt5.QtGui import QPainter, QColor, QPen, QPainterPath, QLinearGradient, QPolygonF
 from pymodbus.client import ModbusTcpClient
 
-class OknoAlarmow(QDialog):
+class OknoAlarmowe(QDialog):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Dziennik Zdarzen i Alarmow")
@@ -38,6 +38,58 @@ class OknoAlarmow(QDialog):
         if typ == "ALARM":
             self.show()
             self.raise_()
+
+class OknoUzupelniania(QDialog):
+    def __init__ (self, scada_window):
+        super().__init__()
+        self.scada = scada_window
+        self.setWindowTitle("Uzupelnianie zbiornikow zrodlowych")
+        self.setFixedSize(400, 400)
+        
+        layout = QVBoxLayout()
+
+        etykieta = QLabel("Jaki kolor chcesz uzupelnic?")
+        etykieta.setAlignment(Qt.AlignCenter)
+        etykieta.setStyleSheet("font-weight: bold; font-size: 12px;")
+        layout.addWidget(etykieta)
+
+        dane_przyciskow = [
+            ("CYAN", "#00FFFF", "black", 'C'),
+            ("MAGENTA", "#FFFF00", "black", 'M'),
+            ("YELLOW", "#FF00FF", "black", 'Y'),
+            ("BLACK", "#000000", "white", 'K'),
+            ("WHITE", "#FFFFFF", "black", 'W')
+        ]
+
+        for nazwa, tlo, tekst, kod in dane_przyciskow:
+            przycisk = QPushButton(f"UZUPELNIJ {nazwa}")
+            przycisk.setStyleSheet(f"background-color: {tlo}; color: {tekst}; font-weight: bold; padding: 10px; border: 1px solid gray;")
+            przycisk.setProperty("kod_przycisku", kod)
+            przycisk.clicked.connect(self.obsluga_klikniecia)
+
+            layout.addWidget(przycisk)
+
+        layout.addSpacing(10)
+
+        napelnij_wszystkie = QPushButton("UZUPELNIJ WSZYSTKO")
+        napelnij_wszystkie.setStyleSheet("background-color: green; color: white; font-weight: bold; padding: 10px; border: 1px solid gray;")
+        napelnij_wszystkie.clicked.connect(self.scada.uzupelnij_farby)
+        layout.addWidget(napelnij_wszystkie)
+
+        layout.addStretch()
+
+        oproznij_wszystkie = QPushButton("OPROZNIJ WSZYSTKO")
+        oproznij_wszystkie.setStyleSheet("background-color: red; color: white; font-weight: bold; padding: 10px; border: 1px solid gray;")
+        oproznij_wszystkie.clicked.connect(self.scada.oproznij_zbiorniki)
+        layout.addWidget(oproznij_wszystkie)
+
+        
+        self.setLayout(layout)
+
+    def obsluga_klikniecia(self):
+        nadawca = self.sender()
+        kod_do_uzupelnienia = nadawca.property("kod_przycisku")
+        self.scada.uzupelnij_pojedynczy(kod_do_uzupelnienia)
 
 class Rura:
     def __init__ (self, punkty, kolor_farby, grubosc = 12, kolor_rury=Qt.gray):
@@ -109,6 +161,10 @@ class Zbiornik:
 
     def uzupenlnij_zbiornik(self):
         self.aktualna_ilosc = self.pojemnosc
+        self.aktualizuj_poziom()
+
+    def oproznij_zbiornik(self):
+        self.aktualna_ilosc = 0.0
         self.aktualizuj_poziom()
 
     def ustaw_kolor(self, kolor):
@@ -341,7 +397,7 @@ class AplikacjaSCADA(QWidget):
         # self.proporcje_kolorow.setAlignment(Qt.AlignCenter)
         self.proporcje_kolorow.setStyleSheet("font-size: 10px;")
 
-        self.okno_alarmowe = OknoAlarmow()
+        self.okno_alarmowe = OknoAlarmowe()
         self.okno_alarmowe.dodaj_wpis("Aplikacja SCADA uruchomiona.", "INFO")
 
         self.przycisk_alarmy = QPushButton("DZIENNIK POWIADOMIEN", self.panel)
@@ -349,11 +405,12 @@ class AplikacjaSCADA(QWidget):
         self.przycisk_alarmy.setStyleSheet(" color: black; font-size: 15px; font-weight: bold;")
         self.przycisk_alarmy.clicked.connect(self.okno_alarmowe.show)
 
+        self.okno_uzupelnij = OknoUzupelniania(self)
 
         self.przycisk_uzupelnij = QPushButton("UZUPELNIJ", self.panel)
         self.przycisk_uzupelnij.setGeometry(20, 660 , 250, 50)
         self.przycisk_uzupelnij.setStyleSheet("background-color: green; color: white; font-size:15px; font-weight: bold;")
-        self.przycisk_uzupelnij.clicked.connect(self.uzupelnij_farby)
+        self.przycisk_uzupelnij.clicked.connect(self.otworz_okno_uzupelniania)
 
         self.przycisk_rozlej = QPushButton("ROZLEJ", self.panel)
         self.przycisk_rozlej.setGeometry(20, 730, 250, 50 )
@@ -439,6 +496,7 @@ class AplikacjaSCADA(QWidget):
                 brak_skladnikow = True
         if brak_skladnikow:
             self.status.setText("Blad: Za malo skladnikow!")
+            self.stan = "OCZEKIWANIE"
             return
 
         self.cel_skladniki = wymagane
@@ -471,6 +529,7 @@ class AplikacjaSCADA(QWidget):
     def logika_symulacji(self):
         if self.stan == "DOZOWANIE":
             self.przycisk_start.setStyleSheet("background-color: grey; color: black; font-size: 15px; font-weight: bold;")
+            self.przycisk_uzupelnij.setStyleSheet("background-color: grey; color: black; font-size:15px; font-weight: bold;")
             if self.indeks_skladnika >= len(self.kolejnosc):
                 self.stan = "MIESZANIE"
                 self.licznik_czasu = 0
@@ -540,6 +599,7 @@ class AplikacjaSCADA(QWidget):
                 self.status.setText("Status: ZAKONCZONO")
                 self.steruj_plc('ROZLEW', False)
                 self.przycisk_start.setStyleSheet("background-color: green; color: white; font-size: 15px; font-weight: bold;")
+                self.przycisk_uzupelnij.setStyleSheet("background-color: green; color: white; font-size:15px; font-weight: bold;")
                 self.przycisk_rozlej.setStyleSheet("background-color: grey; color: black; font-size: 15px; font-weight: bold;")
                 self.hex_wejsciowy.setText("#")
                 self.okno_alarmowe.dodaj_wpis(f"Rozlewanie zakonczone. Proces produkcji farby {self.kod} zakonczony.", "SUKCES")
@@ -549,11 +609,27 @@ class AplikacjaSCADA(QWidget):
 
         self.update()
 
+    def otworz_okno_uzupelniania(self):
+        if self.stan == "OCZEKIWANIE" or self.stan == "ZAKONCZONO":
+            self.okno_uzupelnij.show()
 
     def uzupelnij_farby(self):
         if self.stan == "OCZEKIWANIE" or self.stan == "ZAKONCZONO":
             for zb in self.zbiorniki.values(): zb.uzupenlnij_zbiornik()
-            self.okno_alarmowe.dodaj_wpis(f"Uzupelniono zbiorniki zrodlowe.", "INFO")
+            self.okno_alarmowe.dodaj_wpis(f"Uzupelniono wszystykie zbiorniki zrodlowe.", "INFO")
+            self.update()
+
+    def uzupelnij_pojedynczy(self, klucz):
+        if self.stan == "OCZEKIWANIE" or self.stan == "ZAKONCZONO":
+            self.zbiorniki[klucz].uzupenlnij_zbiornik()
+            nazwa = self.zbiorniki[klucz].nazwa
+            self.okno_alarmowe.dodaj_wpis(f"Uzupelniono zbiornik {nazwa}.", "INFO")
+            self.update()
+
+    def oproznij_zbiorniki(self):
+         if self.stan == "OCZEKIWANIE" or self.stan == "ZAKONCZONO":
+            for zb in self.zbiorniki.values(): zb.oproznij_zbiornik()
+            self.okno_alarmowe.dodaj_wpis(f"Oprozniono wszystykie zbiorniki zrodlowe.", "INFO")
             self.update()
 
     def paintEvent(self, event):
