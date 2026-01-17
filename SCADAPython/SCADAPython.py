@@ -297,7 +297,8 @@ class AplikacjaSCADA(QWidget):
             if self.client.connect():
                 self.modbus_polaczony = True
                 print("Polaczono z PLC")
-            else : print("Brak polaczenia z PLC. Wlaczanie demo graficznego.")
+            else: 
+                print("Brak polaczenia z PLC. Wlaczanie demo graficznego.")
         except: print("Blad polaczenia z PLC.")
 
         self.mapa_cewek = {'C': 0, 'M': 1, 'Y' : 2, 'K': 3, 'W': 4, 'ROZLEW': 5, 'MIESZADLO': 6}
@@ -394,7 +395,6 @@ class AplikacjaSCADA(QWidget):
 
         self.proporcje_kolorow = QLabel("", self.panel)
         self.proporcje_kolorow.setGeometry(20, 230, 250, 80)
-        # self.proporcje_kolorow.setAlignment(Qt.AlignCenter)
         self.proporcje_kolorow.setStyleSheet("font-size: 10px;")
 
         self.okno_alarmowe = OknoAlarmowe()
@@ -623,7 +623,7 @@ class AplikacjaSCADA(QWidget):
     def uzupelnij_farby(self):
         if self.stan == "OCZEKIWANIE" or self.stan == "ZAKONCZONO":
             for zb in self.zbiorniki.values(): zb.uzupenlnij_zbiornik()
-            self.okno_alarmowe.dodaj_wpis(f"Uzupelniono wszystykie zbiorniki zrodlowe.", "INFO")
+            self.okno_alarmowe.dodaj_wpis(f"Uzupelniono wszystkie zbiorniki zrodlowe.", "INFO")
             self.update()
 
     def uzupelnij_pojedynczy(self, klucz):
@@ -636,7 +636,7 @@ class AplikacjaSCADA(QWidget):
     def oproznij_zbiorniki(self):
          if self.stan == "OCZEKIWANIE" or self.stan == "ZAKONCZONO":
             for zb in self.zbiorniki.values(): zb.oproznij_zbiornik()
-            self.okno_alarmowe.dodaj_wpis(f"Oprozniono wszystykie zbiorniki zrodlowe.", "INFO")
+            self.okno_alarmowe.dodaj_wpis(f"Oprozniono wszystkie zbiorniki zrodlowe.", "INFO")
             self.update()
 
     def paintEvent(self, event):
