@@ -2,7 +2,7 @@
 
 Projekt zaliczeniowy realizujący wizualizację i sterowanie procesem mieszalni farb w języku Python. Aplikacja symuluje działanie systemu SCADA, komunikując się z wirtualnym sterownikiem PLC poprzez Modbus.
 
-##Opis projektu
+## Opis projektu
 
 Aplikacja umożliwia użytkownikowi zdefiniowanie koloru docelowego w formacie HEX. System automatycznie przelicza proporcje składowych (CMYK + biała baza), dozuje odpowiednie ilości farb do zbiornika głównego, miesza je i umożliwia zrzut gotowego produktu. Cały proces wizualizowany jest za pomocą animacji poziomu cieczy, przepływu w rurach oraz pracy urządzeń wykonawczych (zawory, mieszadło).
 
