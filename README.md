@@ -35,7 +35,7 @@ Przed uruchomieniem programu należy upewić się, że pobrane zostały wymagane
 
 ## Autor
 
-Karol Brzostek,
-numer albumu: 203970
-Automatyka, Robotyka i Systemy Sterowania, semestr 3
-Wydział Automatyki i Elektrotechniki Politechniki Gdańskiej
+Karol Brzostek  
+numer albumu: 203970  
+Automatyka, Robotyka i Systemy Sterowania, semestr 3  
+Wydział Automatyki i Elektrotechniki Politechniki Gdańskiej  
